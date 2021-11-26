@@ -5,7 +5,7 @@ gamezone_t gamezone = { 0 };
 ScoreInfo score;
 BlockInfo current, successor;
 system_clock::time_point start_time;
-ButtonManager mainBM, scoreBM;
+ButtonManager mainBM({2 * CELL, 2 * CELL}), scoreBM({2 * CELL, 2 * CELL});
 const wchar_t info[] =
 LR"(Tetris 俄罗斯方块 By Yaossg
 采用 C++17 编写使用 EasyX 库，涉及到 MFC)";

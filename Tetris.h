@@ -16,6 +16,7 @@
 #include <chrono>
 #include <filesystem>
 #include <set>
+#include <functional>
 using namespace std;
 using namespace std::chrono;
 namespace fs = std::filesystem;
@@ -193,23 +194,24 @@ struct Button
 	void draw() const
 	{
 		setfillcolor(color);
-		COLORREF bgcolor = getbkcolor();
+		COLORREF bkcolor = getbkcolor();
 		setbkcolor(color);
 		fillrectangle(left, top, right, bottom);
 		RECT r = { left, top, right, bottom };
 		settextstyle(CELL, 0, NULL);
 		drawtext(text.c_str(), &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-		setbkcolor(bgcolor);
+		setbkcolor(bkcolor);
 	}
 	int left, top, right, bottom;
 	COLORREF color;
 	wstring text;
-	void (*func)();
+	function<void()> func;
 	bool repaint;
 };
 
 struct ButtonManager
 {
+	ButtonManager(POINT origin): origin(origin), repaint(true) {}
 	void add(Button const& button)
 	{
 		buttons.push_back(button);
@@ -231,10 +233,10 @@ struct ButtonManager
 			{
 				for (Button button : buttons)
 				{
-					if (button.left <= msg.x - CELL * 2
-						&& button.right >= msg.x - CELL * 2
-						&& button.top <= msg.y - CELL * 2
-						&& button.bottom >= msg.y - CELL * 2)
+					if (button.left <= msg.x - origin.x
+						&& button.right >= msg.x - origin.x
+						&& button.top <= msg.y - origin.y
+						&& button.bottom >= msg.y - origin.y)
 					{
 						FlushMouseMsgBuffer();
 						button.func();
@@ -247,8 +249,9 @@ struct ButtonManager
 		}
 		return false;
 	}
-	bool repaint = true;
+	bool repaint;
 private:
+	POINT origin;
 	std::vector<Button> buttons;
 };
 
