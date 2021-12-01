@@ -59,6 +59,7 @@ void drawScore()
 	settextstyle(CELL, 0, font);
 	RECT r = { CELL * MWIDTH + CELL, CELL * AHEIGHT + CELL,
 		CELL * MWIDTH + CELL * 16, CELL * AHEIGHT + CELL * 8 };
+	setbkmode(OPAQUE);
 	drawtext(ws.c_str(), &r, DT_LEFT | DT_VCENTER);
 }
 
@@ -356,7 +357,7 @@ void putScoreList()
 	scorelist.erase(--scorelist.end());
 	for (ScoreListElement const& e : scorelist) 
 	{
-		file << e.second << L' ' << e.first;
+		file << e.second << L' ' << e.first << L'\n';
 	}
 }
 
@@ -475,11 +476,26 @@ void askName(wstring title)
 	{
 		InputBox(buf, sizeof buf / sizeof *buf, L"请输入昵称：(不超过 128 字符）", title.c_str());
 		score.name = buf;
-		if (score.name.empty())
+		if (score.name.empty()) {
 			MessageBox(GetHWnd(), L"您输入的昵称为空，请重新输入",
 				L"昵称不能为空", MB_OK);
-		if (score.name.length() > 16)
+		}
+		if (score.name.length() > 16) {
 			MessageBox(GetHWnd(), L"您输入的昵称过长，请重新输入",
 				L"昵称过长", MB_OK);
-	} while (score.name.length() > 128 || score.name.empty());
+			score.name.clear();
+		}
+		bool English = true;
+		for (int i = 0; i < score.name.length(); ++i) {
+			if (!isascii(score.name[i])) {
+				English = false;
+				break;
+			}
+		}
+		if (!English) {
+			MessageBox(GetHWnd(), L"您输入的昵称包含非英文字符，请重新输入",
+				L"昵称非法", MB_OK);
+			score.name.clear();
+		}
+	} while (score.name.empty());
 }

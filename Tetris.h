@@ -194,13 +194,11 @@ struct Button
 	void draw() const
 	{
 		setfillcolor(color);
-		COLORREF bkcolor = getbkcolor();
-		setbkcolor(color);
 		fillrectangle(left, top, right, bottom);
 		RECT r = { left, top, right, bottom };
+		setbkmode(TRANSPARENT);
 		settextstyle(CELL, 0, NULL);
 		drawtext(text.c_str(), &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-		setbkcolor(bkcolor);
 	}
 	int left, top, right, bottom;
 	COLORREF color;
