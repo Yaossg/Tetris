@@ -81,10 +81,10 @@ typedef BYTE gamezone_t[MHEIGHT][MWIDTH];
 #define ESC 27
 #define SCREENSHOT 233
 
-#define LOST 2
-#define DEF -1
-
 #define SCORELISTSIZE 10
+
+#define BUF_LEN 20
+#define NAME_LEN 10
 
 #define AS_BLOCK(x, y) (CELL * (x)), (CELL * (y)), \
 	(CELL * ((x) + 1) - 1), (CELL * ((y) + 1) - 1)
@@ -163,7 +163,7 @@ struct ScoreInfo
 using ScoreListElement = pair<int, wstring>;
 using ScoreList = multiset<ScoreListElement, greater<ScoreListElement>>;
 
-struct SaveBuf {
+struct LevelBuf {
 	gamezone_t gamezone;
 	struct {
 		int x, y, t, s;
@@ -282,12 +282,12 @@ bool blockfull(BlockInfo const& block);
 //游戏开始
 void newGame();
 void oldGame();
-int gameLost();
+void gameLost();
 
 //流程控制
 bool tryFall();
 int getKey();
-int execute();
+bool execute();
 
 //主函数
 void initButtons();
@@ -306,4 +306,4 @@ void screenshot();
 
 void saveGame();
 void loadGame();
-void askName(wstring title);
+wstring askName(wstring title, wstring fallback);

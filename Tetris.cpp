@@ -2,7 +2,7 @@
 
 default_random_engine RandomEngine(random_device{}());
 gamezone_t gamezone = { 0 };
-ScoreInfo score;
+ScoreInfo scoreinfo;
 BlockInfo current, successor;
 system_clock::time_point start_time;
 ButtonManager mainBM({2 * CELL, 2 * CELL}), scoreBM({2 * CELL, 2 * CELL});
@@ -54,8 +54,8 @@ void eraseBlocks(BlockInfo const& block)
 void drawScore()
 {
 	wstring ws = static_cast<wstringstream&>(wstringstream()
-		<< L"分数:" << score.score << endl
-		<< L"当前难度:" << score.difficulty).str();
+		<< L"分数:" << scoreinfo.score << endl
+		<< L"当前难度:" << scoreinfo.difficulty).str();
 	settextstyle(CELL, 0, font);
 	RECT r = { CELL * MWIDTH + CELL, CELL * AHEIGHT + CELL,
 		CELL * MWIDTH + CELL * 16, CELL * AHEIGHT + CELL * 8 };
@@ -68,7 +68,7 @@ bool tryFall()
 	system_clock::time_point stop_time = system_clock::now();
 	unsigned long long dur_time =
 		duration_cast<milliseconds>(stop_time - start_time).count();
-	if (dur_time > 1500u / (1 + score.difficulty * 0.365))
+	if (dur_time > 1500u / (1 + scoreinfo.difficulty * 0.365))
 	{
 		start_time = stop_time;
 		return true;
@@ -171,7 +171,7 @@ void clearLine()
 		}
 		else --i;
 	}
-	score.clearLine(count);
+	scoreinfo.clearLine(count);
 	drawScore();
 }
 
@@ -207,10 +207,10 @@ int getKey()
 		case ESC:			return ESC;
 		}
 	}
-	return DEF;
+	return -1;
 }
 
-int execute()
+bool execute()
 {
 	switch (getKey())
 	{
@@ -224,24 +224,28 @@ int execute()
 		moveBlock(&BlockInfo::rightMove);
 		break;
 	case DOWN:
-		if (!fallDown())
-			return LOST;
+		if (!fallDown()) {
+			gameLost();
+			return false;
+		}
 		break;
 	case ESC:
-		switch (MessageBox(GetHWnd(), L"\"是\":保存并退出\n\"否\":直接退出\"取消:\"不退出", 
+		switch (MessageBox(GetHWnd(), L"\"是\":保存本局游戏\n\"否\":结束本局游戏\"取消:\"不退出", 
 			L"您确定要退出并保存吗？", MB_YESNOCANCEL | MB_ICONWARNING))
 		{
 		case IDYES:
 			saveGame();
+			return false;
 		case IDNO:
-			return ESC;
+			gameLost();
+			return false;
 		default:
 		case IDCANCEL:
 			;
 		}break;
 	case SCREENSHOT: screenshot();  break;
 	}
-	return DEF;
+	return true;
 }
 
 void initButtons()
@@ -300,45 +304,38 @@ void tryExit()
 void newGame()
 {
 	start_time = system_clock::now();
-	int ret;
-	score.name.clear();
-	do
-	{
-		score.difficulty = 1;
-		initEnviroment();
-		memset(gamezone, 0, sizeof gamezone);
-		drawScore();
-		randomblocks();
-		spawnblocks();
-		while ((ret = execute()) == DEF);
-	} while (ret == LOST && gameLost() == IDYES);
+	scoreinfo.name.clear();
+	scoreinfo.difficulty = 1;
+	initEnviroment();
+	memset(gamezone, 0, sizeof gamezone);
+	drawScore();
+	randomblocks();
+	spawnblocks();
+	while (execute());
 }
 
 void oldGame()
 {
-	askName(L"加载游戏");
-	if (!fs::exists(score.name))
+	scoreinfo.name.clear();
+	while (scoreinfo.name.empty()) scoreinfo.name = askName(L"加载游戏", L"");
+	if (!fs::exists(scoreinfo.name))
 	{
 		MessageBox(GetHWnd(), L"没有可用的存档", L"加载存档", MB_OK);
 		return;
 	}
 	start_time = system_clock::now();
 	loadGame();
-	fs::remove(score.name);
-	int ret;
-	while ((ret = execute()) == DEF);
-	if (ret == LOST && gameLost() == IDYES)
-		newGame();
+	fs::remove(scoreinfo.name);
+	while (execute());
 }
 
-int gameLost()
+void gameLost()
 {
-	if(score.name.empty())askName(L"游戏结束");
-	putScoreList();
-	return MessageBox(GetHWnd(), static_cast<wstringstream&>(
-		wstringstream() << L"分数:" << score.score
-		<< endl << L"还有再来一盘吗？"
-		).str().c_str(), L"游戏结束", MB_YESNO | MB_ICONWARNING);
+	MessageBox(GetHWnd(), (L"您的得分：" + to_wstring(scoreinfo.score)).c_str(), L"游戏结束", MB_OK | MB_ICONINFORMATION);
+	if (scoreinfo.name.empty())
+		scoreinfo.name = askName(L"计入高分榜", L"\n若昵称为空则放弃本次成绩");
+	if (!scoreinfo.name.empty())
+		putScoreList();
 }
 
 void initScoreList()
@@ -353,7 +350,7 @@ void putScoreList()
 	ScoreList scorelist;
 	getScoreList(scorelist);
 	wofstream file("ScoreList.txt");
-	scorelist.insert({ score.score, score.name });
+	scorelist.insert({ scoreinfo.score, scoreinfo.name });
 	scorelist.erase(--scorelist.end());
 	for (ScoreListElement const& e : scorelist) 
 	{
@@ -421,16 +418,17 @@ void screenshot()
 
 void saveGame()
 {
-	if(score.name.empty()) askName(L"保存游戏");
-	fs::remove(score.name);
-	SaveBuf buf;
+	while (scoreinfo.name.empty())
+		scoreinfo.name = askName(L"保存游戏", L"");
+	fs::remove(scoreinfo.name);
+	LevelBuf buf;
 	memcpy(buf.gamezone, gamezone, sizeof gamezone);
 	memcpy(&buf.current, &current, sizeof current);
 	buf.successor.t = successor.t;
 	buf.successor.s = successor.s;
-	buf.score.score = score.score;
-	buf.score.difficulty = score.difficulty;
-	ofstream file(score.name, ios::binary);
+	buf.score.score = scoreinfo.score;
+	buf.score.difficulty = scoreinfo.difficulty;
+	ofstream file(scoreinfo.name, ios::binary);
 	file.write(reinterpret_cast<char*>(&buf), sizeof buf);
 }
 
@@ -438,16 +436,16 @@ void loadGame()
 {
 	initEnviroment();
 
-	ifstream file(score.name, ios::binary);
-	SaveBuf buf;
+	ifstream file(scoreinfo.name, ios::binary);
+	LevelBuf buf;
 	file.read(reinterpret_cast<char*>(&buf), sizeof buf);
 
 	memcpy(gamezone, buf.gamezone, sizeof gamezone);
 	memcpy(&current, &buf.current, sizeof current);
 	successor.t = buf.successor.t;
 	successor.s = buf.successor.s;
-	score.score = buf.score.score;
-	score.difficulty = buf.score.difficulty;
+	scoreinfo.score = buf.score.score;
+	scoreinfo.difficulty = buf.score.difficulty;
 
 	successor.x = MWIDTH + 1;
 	successor.y = 0;
@@ -469,33 +467,26 @@ void loadGame()
 	drawBlocks(successor);
 }
 
-void askName(wstring title)
-{
-	wchar_t buf[64];
-	do
-	{
-		InputBox(buf, sizeof buf / sizeof *buf, L"请输入昵称：(不超过 128 字符）", title.c_str());
-		score.name = buf;
-		if (score.name.empty()) {
-			MessageBox(GetHWnd(), L"您输入的昵称为空，请重新输入",
-				L"昵称不能为空", MB_OK);
+bool valid(wstring name) {
+	if (name.length() > NAME_LEN) return false;
+	for (int i = 0; i < name.length(); ++i) {
+		if (!isalnum(name[i]) && name[i] != '_') {
+			return false;
 		}
-		if (score.name.length() > 16) {
-			MessageBox(GetHWnd(), L"您输入的昵称过长，请重新输入",
-				L"昵称过长", MB_OK);
-			score.name.clear();
-		}
-		bool English = true;
-		for (int i = 0; i < score.name.length(); ++i) {
-			if (!isascii(score.name[i])) {
-				English = false;
-				break;
-			}
-		}
-		if (!English) {
-			MessageBox(GetHWnd(), L"您输入的昵称包含非英文字符，请重新输入",
-				L"昵称非法", MB_OK);
-			score.name.clear();
-		}
-	} while (score.name.empty());
+	}
+	return true;
+}
+
+wstring askName(wstring title, wstring fallback) {
+	wstring name;
+	wchar_t buf[BUF_LEN];
+	while (true) {
+		InputBox(buf, BUF_LEN, (L"请输入昵称\n" + to_wstring(NAME_LEN) 
+			+ L" 个字符以内，仅包含字母、数字和下划线" 
+			+ fallback).c_str(), title.c_str());
+		name = buf;
+		if (valid(name)) break;
+		MessageBox(GetHWnd(), L"您输入的昵称非法，请重新输入", L"昵称非法", MB_OK);
+	}
+	return name;
 }
